@@ -48,11 +48,12 @@ def _wrap_loader(original: Callable[..., Any], logger: Any) -> Callable[..., Any
             raise ValueError(f"No per-head target scales in {scale_path}")
 
         rank, size = _parallel()
-        expected_tp = payload.get("calibration_tp_size")
-        if expected_tp is not None and int(expected_tp) != size:
-            raise ValueError(
-                f"Target scale file was calibrated for TP={expected_tp}, current TP={size}"
-            )
+        # The scale arrays are in global contiguous KV-head order.  The TP
+        # size used while collecting them is provenance only: a TP=1 runtime
+        # consumes every entry, while TP=2 consumes its rank-local slice.
+        # install_static_per_head_scales validates that the current topology
+        # can partition the global values exactly.
+        calibration_tp = payload.get("calibration_tp_size")
 
         from sglang.srt.layers.attention.sglang_per_head_fp8 import (
             install_static_per_head_scales,
@@ -89,9 +90,10 @@ def _wrap_loader(original: Callable[..., Any], logger: Any) -> Callable[..., Any
             )
         logger.info(
             "Qwen3.8 target per-head FP8 KV scales loaded: rank=%d/%d, "
-            "layers=%s, source=%s",
+            "calibration_tp=%s, layers=%s, source=%s",
             rank,
             size,
+            calibration_tp,
             loaded,
             scale_path,
         )

@@ -46,7 +46,8 @@
 ```text
 .
 ├── apply_patch.py                  # 安装、验证、回滚
-├── start_example.sh                # 完整启动命令
+├── start_example.sh                # 通用启动命令（默认双卡 TP=2）
+├── start_single_gpu.sh             # 单卡 TP=1 便捷入口
 ├── scripts/
 │   ├── create_tested_env.sh        # 从已有 SGLang 环境复制并重建锁定基线
 │   └── verify_server.sh            # API 和缓存命中自检
@@ -173,8 +174,8 @@ SGLANG_API_KEY='请替换为你自己的本地密钥' \
 
 ```text
 主模型 KV: Per-Head FP8 E4M3
-Draft KV: 每 TP rank、每层一个 K/V 标量 FP8 E4M3
-DFlash fc: RowParallelLinear，TP=2
+Draft KV: TP=2 时每 rank/层一个 K/V 标量；TP=1 时为保守并集标量
+DFlash fc: RowParallelLinear，TP=1/2
 context length: 模型配置默认值
 mem fraction static: 0.90
 chunked prefill: 1024
@@ -192,6 +193,29 @@ SGLANG_PORT=8000 \
 SGLANG_API_KEY='replace-me' \
 ./start_example.sh
 ```
+
+### 单卡模式
+
+双卡仍然是默认且实测的路径；单卡启动不会改变双卡配置。单卡使用同一个主模型
+Per-Head 全局缩放文件，运行时将全部 KV head 分配给 rank 0；Draft 则使用两个
+TP=2 rank 标量缩放的逐层 `max(K)` / `max(V)` 保守并集。
+
+```bash
+SGLANG_CONDA_ENV=sglang-qwen38 \
+SGLANG_API_KEY='replace-me' \
+CUDA_VISIBLE_DEVICES=0 \
+./start_single_gpu.sh
+```
+
+也可以直接显式指定：
+
+```bash
+TP_SIZE=1 CUDA_VISIBLE_DEVICES=0 SGLANG_API_KEY='replace-me' ./start_example.sh
+```
+
+注意：当前的 `Qwen3.8-27B-AWQ-INT4` 加 `DFlash2-W4A16` 无法装入单张 20 GiB
+RTX 3080。这里的单卡支持指补丁与启动流程在 TP=1 下正确工作，适用于显存更大的
+单卡，或替换为更小的主模型/Draft；它不会降低模型本身的显存需求。
 
 ## 6. API 验证
 
@@ -240,7 +264,8 @@ python apply_patch.py \
 
 - 这是针对特定模型结构与版本的研究/部署补丁，不是 SGLang 官方功能。
 - 主模型 Per-Head scale 为静态校准值，不是运行时动态校准。
-- 仅验证 TP=2；不要直接用于 TP=1/4。
+- 实测完整服务为 TP=2；TP=1 已对缩放切分和 Draft 保守 profile 做离线验证。
+  TP=4 或其他并行拓扑仍需重新校准与验证。
 - RTX 3080 不原生执行 FP8 Tensor Core，FP8 在这里主要用于 KV 容量和带宽优化。
 - 升级 SGLang 后应先在副本环境执行 `apply_patch.py --verify` 和离线测试。
 

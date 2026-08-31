@@ -35,6 +35,31 @@ def _positive_scalar(value: Any, label: str) -> float:
     return result
 
 
+def _entries_for_topology(payload: dict[str, Any], *, rank: int, tp_size: int) -> dict[str, Any]:
+    """Return calibrated Draft scales for the active TP topology.
+
+    A scalar Draft scale cannot preserve individual head/rank variation on a
+    single GPU.  The bundled ``single_gpu`` profile is a conservative union of
+    the TP=2 rank profiles: for each Draft layer it uses max(K_rank0, K_rank1)
+    and max(V_rank0, V_rank1).  This is safe for TP=1 and intentionally leaves
+    the exact TP=2 rank profiles unchanged.
+    """
+    if tp_size == 1:
+        entries = payload.get("single_gpu")
+        if not isinstance(entries, dict):
+            raise ValueError(
+                "No single_gpu DFlash scalar profile in the scale file. "
+                "Use a scale file calibrated for TP=1 or add its conservative profile."
+            )
+        return entries
+
+    ranks = payload.get("ranks")
+    entries = ranks.get(str(rank)) if isinstance(ranks, dict) else None
+    if not isinstance(entries, dict):
+        raise ValueError(f"No DFlash scalar scales for TP rank {rank}")
+    return entries
+
+
 def install_dflash_scalar_loader(logger: Any) -> None:
     from sglang.srt.models.dflash import DFlash2DraftModel
 
@@ -53,11 +78,10 @@ def install_dflash_scalar_loader(logger: Any) -> None:
 
         from sglang.srt.runtime_context import get_parallel
 
-        rank = int(get_parallel().tp_rank)
-        ranks = payload.get("ranks")
-        entries = ranks.get(str(rank)) if isinstance(ranks, dict) else None
-        if not isinstance(entries, dict):
-            raise ValueError(f"No DFlash scalar scales for TP rank {rank}")
+        parallel = get_parallel()
+        rank = int(parallel.tp_rank)
+        tp_size = int(parallel.tp_size)
+        entries = _entries_for_topology(payload, rank=rank, tp_size=tp_size)
 
         loaded: list[int] = []
         for layer_id, layer in enumerate(self.layers):
@@ -74,8 +98,11 @@ def install_dflash_scalar_loader(logger: Any) -> None:
             loaded.append(layer_id)
 
         logger.info(
-            "DFlash scalar FP8 KV scales loaded: rank=%d, layers=%s, source=%s",
+            "DFlash scalar FP8 KV scales loaded: rank=%d/%d, profile=%s, "
+            "layers=%s, source=%s",
             rank,
+            tp_size,
+            "single_gpu" if tp_size == 1 else f"rank-{rank}",
             loaded,
             scale_path,
         )

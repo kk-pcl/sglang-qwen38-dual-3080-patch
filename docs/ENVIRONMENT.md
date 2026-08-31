@@ -51,11 +51,15 @@ against the new upstream implementation instead.
 The two JSON files under `scales/` are calibration artifacts, not generic FP8
 defaults:
 
-- target scales: TP=2, 16 full-attention layers, per local KV head;
-- DFlash2 scales: TP rank + draft layer scalar K/V values.
+- target scales: 16 full-attention layers in **global contiguous KV-head**
+  order. The calibration was collected under TP=2, but the same four global
+  heads can be consumed directly under TP=1 or partitioned under TP=2;
+- DFlash2 scales: exact scalar K/V values for TP=2 rank 0/1 plus a TP=1
+  conservative profile formed by `max(K_rank0, K_rank1)` and
+  `max(V_rank0, V_rank1)` for each Draft layer.
 
-Using different weights, a different architecture or another TP size requires
-new calibration and validation.
+Using different weights, a different architecture or TP>2 requires new
+calibration and validation.
 
 ## WSL2 / Ampere safety guard
 

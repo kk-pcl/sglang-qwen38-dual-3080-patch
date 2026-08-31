@@ -46,6 +46,20 @@ def test_scale_files() -> None:
             and isinstance(pair["v"], (int, float))
             for pair in layers.values()
         )
+    assert len(draft["single_gpu"]) == 5
+    for layer_id, pair in draft["single_gpu"].items():
+        rank0 = draft["ranks"]["0"][layer_id]
+        rank1 = draft["ranks"]["1"][layer_id]
+        assert pair["k"] == max(rank0["k"], rank1["k"])
+        assert pair["v"] == max(rank0["v"], rank1["v"])
+
+    loader_path = ROOT / "runtime/dflash_scalar_kv_loader.py"
+    loader_spec = importlib.util.spec_from_file_location("dflash_scale_test", loader_path)
+    assert loader_spec is not None and loader_spec.loader is not None
+    loader = importlib.util.module_from_spec(loader_spec)
+    loader_spec.loader.exec_module(loader)
+    assert loader._entries_for_topology(draft, rank=0, tp_size=1) == draft["single_gpu"]
+    assert loader._entries_for_topology(draft, rank=1, tp_size=2) == draft["ranks"]["1"]
 
 
 def test_per_head_math() -> None:
@@ -81,6 +95,27 @@ def test_per_head_math() -> None:
     output = torch.ones(1, 8, 4)
     helper.scale_output_from_paged_attention(output, layer)
     assert output[0, :, 0].tolist() == [17.0] * 4 + [19.0] * 4
+
+    class SingleGpuLayer:
+        tp_k_head_num = 4
+        tp_v_head_num = 4
+        tp_q_head_num = 16
+        head_dim = 4
+        v_head_dim = 4
+        k_scale = torch.tensor(1.0)
+        v_scale = torch.tensor(1.0)
+
+    single = SingleGpuLayer()
+    helper.install_static_per_head_scales(
+        single,
+        [2.0, 3.0, 5.0, 7.0],
+        [11.0, 13.0, 17.0, 19.0],
+        tp_rank=0,
+        tp_size=1,
+    )
+    single_k, single_v = helper.get_kv_write_scales(single, 1.0, 1.0)
+    assert single_k.flatten().tolist() == [2.0, 3.0, 5.0, 7.0]
+    assert single_v.flatten().tolist() == [11.0, 13.0, 17.0, 19.0]
 
 
 def main() -> None:

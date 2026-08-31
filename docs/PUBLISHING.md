@@ -73,6 +73,7 @@ git diff --check
 python test_package.py
 PYTHONPATH="$PWD/runtime" python test_runtime_install.py
 python apply_patch.py --verify
+bash -n start_example.sh start_single_gpu.sh scripts/*.sh
 ```
 
 不要提交：
