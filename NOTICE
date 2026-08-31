@@ -1,0 +1,8 @@
+This repository contains an independently maintained patch package for SGLang.
+
+Portions of the runtime integration and generated source modifications are
+derived from or designed to modify SGLang, Copyright 2023-2024 SGLang Team,
+licensed under the Apache License, Version 2.0.
+
+The repository is not affiliated with or endorsed by the SGLang project.
+Model weights and their licenses are not included.
