@@ -194,6 +194,33 @@ SGLANG_API_KEY='replace-me' \
 ./start_example.sh
 ```
 
+### 5.1 只使用官方 DFlash2（不加载本仓库补丁）
+
+如果只想测试上游 SGLang 的 DFlash2，不想使用本仓库的 Per-Head KV、`fc.weight`
+TP 分片或其他运行时注入，可以直接使用：
+
+```bash
+chmod +x start_official_dflash2.sh
+SGLANG_CONDA_ENV=sglang \
+SGLANG_API_KEY='replace-me' \
+./start_official_dflash2.sh
+```
+
+这个入口只传递官方的 `--speculative-algorithm DFLASH`、Draft 模型路径和预测
+token 数，不设置自定义 KV scale、`--kv-cache-dtype`、HiCache 或 `PYTHONPATH`。
+脚本默认使用上游兼容的 BF16 Draft：`incoai/Qwen3.8-27B-DFlash2`；如果已经
+准备了其他官方兼容 Draft，可以覆盖：
+
+```bash
+DRAFT_MODEL_PATH="$HOME/models/Qwen3.8-27B-DFlash2" \
+SGLANG_API_KEY='replace-me' \
+./start_official_dflash2.sh
+```
+
+注意：本仓库的 `start_example.sh` 才是双 RTX 3080 的优化路径；
+`start_official_dflash2.sh` 用于和官方源码做基线对比，故意不加载本仓库的补丁，
+也不保证低比特 W4A16 Draft 在所有 SGLang 版本上都能直接加载。
+
 ### 单卡模式
 
 双卡仍然是默认且实测的路径；单卡启动不会改变双卡配置。单卡使用同一个主模型
