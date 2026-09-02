@@ -206,8 +206,8 @@ SGLANG_API_KEY='replace-me' \
 ./start_official_dflash2.sh
 ```
 
-这个入口只传递官方的 `--speculative-algorithm DFLASH`、Draft 模型路径和预测
-token 数，不设置自定义 KV scale、`--kv-cache-dtype`、HiCache 或 `PYTHONPATH`。
+这个入口使用官方支持的模型加载、Mamba、并发和 DFlash 参数，但不设置自定义 KV
+scale、`--kv-cache-dtype`、HiCache 或 `PYTHONPATH`，也不会注入本仓库的运行时补丁。
 脚本默认使用上游兼容的 BF16 Draft：`incoai/Qwen3.8-27B-DFlash2`；如果已经
 准备了其他官方兼容 Draft，可以覆盖：
 
